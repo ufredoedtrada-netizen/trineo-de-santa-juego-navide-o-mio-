@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Santa en el Trineo 🎅🛷</title>
+  <style>
+    body {
+      margin: 0;
+      background: linear-gradient(#0b3d91, #1e90ff);
+      color: white;
+      text-align: center;
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+    }
+    canvas {
+      background: radial-gradient(circle at top, #1a4fa3, #061a33);
+      border: 3px solid white;
+      display: block;
+      margin: 10px auto;
+    }
+    #menu {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.65);
+    }
+    input, button {
+      padding: 10px 16px;
+      margin: 6px;
+      font-size: 16px;
+      border-radius: 8px;
+      border: none;
+    }
+    button {
+      background: #e63946;
+      color: white;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<h1>🎄 Santa en el Trineo 🎅</h1>
+<p>Usa ◀️ ▶️ para esquivar obstáculos</p>
+
+<canvas id="game" width="400" height="500"></canvas>
+
+<div id="menu">
+  <h2>🎁 Ayuda a Santa a repartir regalos</h2>
+  <input id="nombre" placeholder="Tu nombre" />
+  <button onclick="guardarNombre()">Guardar nombre</button>
+  <button onclick="iniciarJuego()">▶️ Jugar</button>
+</div>
+
+<h2>🏆 Mejores Puntajes</h2>
+<ul id="scores"></ul>
+
+<audio id="musica" loop>
+  <source src="https://cdn.pixabay.com/download/audio/2022/12/06/audio_4c65e2d0e7.mp3" type="audio/mpeg">
+</audio>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const musica = document.getElementById("musica");
+const menu = document.getElementById("menu");
+
+let santa, obstaculos, score, velocidadBase, velocidadActual;
+let jugando = false;
+let copos = [];
+let obstaculosPasados = 0;
+
+function resetear() {
+  santa = { x: 170, y: 410, w: 60, h: 40, v: 25 };
+  obstaculos = [];
+  score = 0;
+  velocidadBase = 2;
+  velocidadActual = velocidadBase;
+  obstaculosPasados = 0;
+  jugando = true;
+}
+
+function guardarNombre() {
+  const nombre = document.getElementById("nombre").value.trim();
+  if (nombre) localStorage.setItem("jugador", nombre);
+}
+
+function iniciarJuego() {
+  if (!localStorage.getItem("jugador")) {
+    alert("Primero ingresa y guarda tu nombre 🎅");
+    return;
+  }
+  resetear();
+  menu.style.display = "none";
+  musica.volume = 0.4;
+  musica.play();
+  requestAnimationFrame(actualizar);
+}
+
+function crearObstaculo() {
+  if (!jugando) return;
+  obstaculos.push({
+    x: Math.random() * 360,
+    y: -40,
+    w: 40,
+    h: 40
+  });
+}
+
+function crearCopo() {
+  copos.push({
+    x: Math.random() * canvas.width,
+    y: -10,
+    r: Math.random() * 3 + 1,
+    v: Math.random() + 0.5
+  });
+}
+
+function actualizar() {
+  if (!jugando) return;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Nieve
+  ctx.fillStyle = "white";
+  copos.forEach(c => {
+    c.y += c.v;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  copos = copos.filter(c => c.y < canvas.height);
+
+  // Santa + trineo
+  ctx.fillStyle = "red";
+  ctx.fillRect(santa.x, santa.y, santa.w, santa.h);
+  ctx.fillStyle = "gold";
+  ctx.fillRect(santa.x - 10, santa.y + 30, santa.w + 20, 10);
+
+  // Obstáculos
+  ctx.fillStyle = "white";
+  obstaculos.forEach(o => {
+    o.y += velocidadActual;
+    ctx.fillRect(o.x, o.y, o.w, o.h);
+
+    if (
+      santa.x < o.x + o.w &&
+      santa.x + santa.w > o.x &&
+      santa.y < o.y + o.h &&
+      santa.y + santa.h > o.y
+    ) {
+      terminarJuego();
+    }
+
+    if (o.y > canvas.height) {
+      obstaculosPasados++;
+      if (obstaculosPasados % 2 === 0) {
+        velocidadActual = velocidadBase * (1 + 0.0005 * obstaculosPasados);
+      }
+    }
+  });
+
+  obstaculos = obstaculos.filter(o => o.y < canvas.height + 50);
+
+  score++;
+  ctx.fillText(`Score: ${score}`, 10, 20);
+
+  requestAnimationFrame(actualizar);
+}
+
+function terminarJuego() {
+  jugando = false;
+  musica.pause();
+  guardarScore();
+  menu.style.display = "flex";
+}
+
+function guardarScore() {
+  const nombre = localStorage.getItem("jugador") || "Anonimo";
+  const scores = JSON.parse(localStorage.getItem("scores") || "[]");
+
+  const existente = scores.find(s => s.nombre === nombre);
+  if (!existente || score > existente.score) {
+    const filtrados = scores.filter(s => s.nombre !== nombre);
+    filtrados.push({ nombre, score });
+    filtrados.sort((a, b) => b.score - a.score);
+    localStorage.setItem("scores", JSON.stringify(filtrados.slice(0, 5)));
+  }
+  mostrarScores();
+}
+
+function mostrarScores() {
+  const lista = document.getElementById("scores");
+  lista.innerHTML = "";
+  const scores = JSON.parse(localStorage.getItem("scores") || "[]");
+  scores.forEach(s => {
+    const li = document.createElement("li");
+    li.textContent = `${s.nombre}: ${s.score}`;
+    lista.appendChild(li);
+  });
+}
+
+setInterval(crearObstaculo, 1200);
+setInterval(crearCopo, 200);
+
+// Controles
+addEventListener("keydown", e => {
+  if (!jugando) return;
+  if (e.key === "ArrowLeft" && santa.x > 0) santa.x -= santa.v;
+  if (e.key === "ArrowRight" && santa.x < canvas.width - santa.w) santa.x += santa.v;
+});
+
+mostrarScores();
+</script>
+
+</body>
+</html>
